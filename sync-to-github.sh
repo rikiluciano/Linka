@@ -9,6 +9,8 @@ if [[ "$(git branch --show-current)" != "main" ]]; then
   exit 1
 fi
 
+export GIT_SSH_COMMAND="ssh -i ${HOME}/.ssh/linka_github -o IdentitiesOnly=yes"
+
 version="${2:-}"
 if [[ -n "$version" ]]; then
   if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -20,8 +22,6 @@ if [[ -n "$version" ]]; then
     exit 1
   fi
 fi
-
-export GIT_SSH_COMMAND="ssh -i ${HOME}/.ssh/linka_github -o IdentitiesOnly=yes"
 
 git pull --rebase --autostash origin main
 git add --all
