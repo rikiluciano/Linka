@@ -93,7 +93,7 @@ class DownloadService : Service() {
             }
             try {
                 withContext(Dispatchers.IO) {
-                    YoutubeDL.getInstance().execute(request, { percentage, _ ->
+                    YoutubeDL.getInstance().execute(request, processId) { percentage, _, _ ->
                         progress = percentage.coerceIn(0f, 100f)
                         notificationManager().notify(
                             notificationId,
@@ -104,7 +104,7 @@ class DownloadService : Service() {
                                 true,
                             ),
                         )
-                    }, processId)
+                    }
                 }
                 speedMonitor.cancel()
                 val saved = outputDir.listFiles().orEmpty()
