@@ -39,7 +39,7 @@ class VideoExtractor {
                     addOption("--audio-format", "mp3")
                     addOption("--audio-quality", "0")
                 }
-                // yt-dlp/FFmpeg pick a compatible container for the selected codecs.
+                else -> Unit // yt-dlp/FFmpeg pick a compatible container for the selected codecs.
             }
         }
     }
