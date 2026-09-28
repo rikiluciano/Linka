@@ -1,209 +1,174 @@
-# CODEX.md — contexto de ingeniería de Linka
+# CODEX.md — ingeniería y operaciones de Linka
 
-Este documento es la guía de entrada para agentes de IA, desarrolladores y colaboradores humanos. Describe el estado y comportamiento reales del repositorio para que el trabajo pueda continuar sin depender del historial del chat. El `README.md` está dirigido a usuarios y reclutadores; este archivo prioriza arquitectura, rutas, decisiones y operación.
+Guía autosuficiente para mantener Linka sin depender del historial de conversación. Describe el código actual, sus límites, comandos, permisos, dependencias y flujo de release. Para la descripción orientada a usuarios/reclutadores, consulta [README.md](README.md).
 
-## 1. Identidad y objetivo
+## 1. Identidad y alcance
 
 - **Nombre:** Linka.
 - **Repositorio público:** `https://github.com/rikiluciano/Linka`.
-- **Plataforma:** aplicación nativa Android escrita en Java.
-- **Paquete / application ID:** `com.rikiluciano.linka`.
-- **Actividad principal:** `com.rikiluciano.linka.MainActivity`.
-- **Problema que resuelve:** reduce los pasos necesarios para guardar un archivo de audio/video accesible después de recibir su enlace desde otra aplicación.
-- **Propuesta de valor:** el usuario comparte o pega un enlace; Linka comprueba si llega a un archivo multimedia directo y entrega la descarga al gestor nativo de Android.
-- **Límite de producto:** el proyecto no descarga ni extrae streams de YouTube, Instagram, Facebook u otras páginas de reproducción. No elude autenticación, controles de acceso o restricciones de plataforma. Solo descarga archivos directos propios o autorizados.
+- **Application ID / namespace:** `com.rikiluciano.linka`.
+- **Lenguaje/UI:** Kotlin, Jetpack Compose.
+- **Arquitectura:** una Activity, ViewModel con `StateFlow`, extractor separado y servicio de descarga en primer plano.
+- **Propósito:** navegador Android con análisis de páginas de video mediante yt-dlp, selección de formatos y descarga/ensamblado local con FFmpeg.
+- **Uso:** el usuario debe poseer los derechos o tener autorización para guardar el medio.
+- **Límites:** no usar cookies del WebView, credenciales, fingerprint spoofing, CAPTCHA bypass, DRM bypass ni otros controles de acceso. El extractor no garantiza soporte de cualquier dominio. Los sitios pueden cambiar y bloquear peticiones.
+- **Privacidad:** no hay backend Linka, telemetría, anuncios, cuentas ni historial persistido de URLs.
 
-El alcance actual es deliberadamente un MVP. No hay conversión a MP3/MP4, selector de calidad, navegador interno, historial local, reproductor, backend, cuentas, telemetría ni anuncios. La app conserva el archivo y la calidad de la URL original.
+La descarga desde algunas plataformas puede estar limitada por los términos del sitio y por derechos de autor. Las capacidades del extractor no implican que el usuario tenga derechos de descarga. No publicitar compatibilidad universal.
 
-## 2. Fuente de verdad y ubicaciones
+## 2. Dependencias/licencia: decisión explícita
 
-- **Rama de trabajo/publicación:** `main`.
-- **Remoto GitHub del servidor:** `git@github.com:rikiluciano/Linka.git`.
-- **Ruta canónica del clon Git en el servidor:** `/home/ricardo/proyects/Linka`.
-- **Clave SSH del servidor:** `/home/ricardo/.ssh/linka_github`; la clave privada permanece en el servidor y está autorizada como deploy key de escritura solo para este repositorio.
-- **Alias SSH usado desde Windows:** `serveras` (configuración local, no se versiona).
-- **Publicador de un solo comando:** `publish-linka.ps1`.
-- **Publicador de servidor:** `sync-to-github.sh`.
-- **Copia anterior de seguridad en el servidor:** `/home/ricardo/proyects/Linka-before-git`.
+El usuario aprobó adoptar GPL-3.0 para Linka para integrar `io.github.junkfood02.youtubedl-android:library:0.18.1` y su módulo `ffmpeg:0.18.1`. El texto completo de GPL está en la raíz (`LICENSE`). Al publicar el código y APK, conserva ese archivo y los avisos de las dependencias transitivas; no relicenciar el conjunto bajo una licencia incompatible. Revisa las licencias nuevamente al actualizar dependencias.
 
-No copiar, imprimir, commitear ni incluir en la documentación credenciales FTP, claves privadas, tokens personales, secretos SSH, archivos `local.properties` o claves de firma Android. La carpeta de respaldo no es el checkout activo.
+Dependencias Android de Compose, Lifecycle, Core KTX y coroutines están fijadas en `app/build.gradle`; no uses rangos dinámicos.
 
-## 3. Estructura y rutas importantes
+`ffmpeg-kit` de arthenica fue retirado/archivado. Este proyecto usa el módulo FFmpeg de `youtubedl-android`, no `com.arthenica:ffmpeg-kit-*`.
+
+## 3. Fuentes de verdad / ubicaciones
+
+- Rama de publicación: `main`.
+- Remoto del servidor: `git@github.com:rikiluciano/Linka.git`.
+- Clon canónico servidor: `/home/ricardo/proyects/Linka`.
+- Publicador desde Windows: `publish-linka.ps1`.
+- Sincronizador del servidor: `sync-to-github.sh`.
+- Clave SSH dedicada permanece en `/home/ricardo/.ssh/linka_github`, fuera de Git.
+- Alias SSH de Windows: `serveras`, configuración no versionada.
+- Respaldo antiguo: `/home/ricardo/proyects/Linka-before-git`; no es el clon activo.
+
+Nunca imprimir, copiar al proyecto o versionar contraseñas FTP, tokens, claves privadas, keystores, `local.properties` o credenciales de servicios.
+
+## 4. Árbol del proyecto
 
 ```text
 Linka/
-├── .github/
-│   └── workflows/
-│       └── android.yml                 # Build en main; build + Release en tags v*
+├── .github/workflows/android.yml            # build APK; Release por tag v*
 ├── app/
-│   ├── build.gradle                   # Android SDK, applicationId y versiones
+│   ├── build.gradle                          # AGP Android/Kotlin, SDK, dependencias
 │   └── src/main/
-│       ├── AndroidManifest.xml        # Internet, launcher y ACTION_SEND text/plain
+│       ├── AndroidManifest.xml               # permisos, Application, Activity, service
 │       ├── java/com/rikiluciano/linka/
-│       │   └── MainActivity.java      # UI, share intent, inspección y descarga
-│       └── res/
-│           ├── drawable/ic_linka.xml  # Icono vectorial
-│           └── values/
-│               ├── strings.xml        # Nombre visible Linka
-│               └── styles.xml        # Tema Material nativo, colores
-├── build.gradle                       # Plugin com.android.application 9.4.0
-├── gradle.properties                 # JVM/AndroidX
-├── settings.gradle                   # Repositorios y módulo :app
-├── .gitignore                        # Build local, IDE, APK/AAB y SDK local
-├── publish-linka.ps1                 # Copiar árbol → sincronizar → Release
-├── sync-to-github.sh                 # Commit, push, versionado y etiqueta en servidor
-├── README.md                         # Documentación pública para usuarios
-└── CODEX.md                          # Este contexto técnico
+│       │   ├── LinkaApplication.kt            # inicialización yt-dlp + FFmpeg
+│       │   ├── MainActivity.kt                # host Compose, ACTION_SEND/ACTION_VIEW
+│       │   ├── download/DownloadService.kt    # FGS, progreso, MediaStore
+│       │   ├── extractor/MediaFormat.kt       # dominio y selector de calidad
+│       │   ├── extractor/VideoExtractor.kt    # getInfo, filtros, request yt-dlp
+│       │   └── ui/
+│       │       ├── BrowserView.kt              # WebView y detección de medios
+│       │       ├── LinkaScreen.kt              # Compose, barra, FAB y BottomSheet
+│       │       └── LinkaViewModel.kt           # StateFlow y coordinación UI
+│       └── res/{drawable,values}/              # icono, nombre y tema
+├── build.gradle                               # AGP y Compose Compiler plugins
+├── settings.gradle                            # repositorios y módulo :app
+├── gradle.properties                          # AndroidX/JVM
+├── LICENSE                                    # GPL-3.0
+├── README.md                                  # documentación pública
+├── publish-linka.ps1                          # estación → servidor → GitHub
+└── sync-to-github.sh                          # commit, semver, push, tag
 ```
 
-No hay módulos adicionales ni dependencias Java externas declaradas. La UI usa widgets Android estándar y la descarga usa APIs del sistema.
+No hay módulos Gradle `:domain`/`:data` por separado todavía. Los paquetes dentro de `:app` separan responsabilidades sin aumentar el overhead del build.
 
-## 4. Plataforma y compilación
+## 5. Configuración Android
 
-- JDK: 17.
-- Android Gradle Plugin: 9.4.0.
-- Gradle de CI: 9.6.0.
-- `compileSdk`: 37.
-- `targetSdk`: 36.
-- `minSdk`: 29 (Android 10).
-- Java source/target compatibility: 17.
-- Tarea CI: `gradle --no-daemon --stacktrace assembleDebug`.
-- Salida original: `app/build/outputs/apk/debug/app-debug.apk`.
-- Nombre de artefacto/asset público: `linka.apk`.
+- `compileSdk 37`; `targetSdk 36`; `minSdk 29`.
+- JDK 17; Android Gradle Plugin 9.4.0; plugin Compose Compiler 2.3.21.
+- `buildFeatures.compose = true`; AGP 9 incorpora soporte Kotlin.
+- Dependencias yt-dlp con ABI `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86`; confirma que las builds debug/release empaquetan solo ABIs soportadas.
+- `android:extractNativeLibs="true"` se declara para los binarios de la librería.
+- `INTERNET` para WebView/extractor.
+- `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`, `FOREGROUND_SERVICE_MEDIA_PROCESSING` para descargas y procesamiento en segundo plano según API.
+- `POST_NOTIFICATIONS` se solicita cuando el usuario inicia una descarga en API 33+.
+- No pedir `READ/WRITE_EXTERNAL_STORAGE` ni `MANAGE_EXTERNAL_STORAGE`; archivos temporales están en caché privada y los terminados se publican mediante `MediaStore.Downloads`.
+- `DownloadService` no exportado. La Activity launcher exportada recibe enlaces `ACTION_SEND text/plain`; valida esquemas HTTP/HTTPS antes de navegar/extracción.
 
-El repositorio no tiene Gradle Wrapper. El workflow instala Gradle 9.6.0 con `gradle/actions/setup-gradle`; Android Studio debe tener un Gradle compatible y descargar Android SDK Platform 37. No hay configuración de signing de distribución: el APK producido es debug-signed.
+Los servicios foreground tienen requisitos/limites de Android dependientes de la versión. Revalida tipos, permisos y duración si cambia `targetSdk`.
 
-## 5. Recorrido de ejecución
+## 6. Entrada y UI
 
-### Entrada desde Android Share
+`MainActivity` es `ComponentActivity`, configura `LinkaScreen` y entrega una URL recibida desde `ACTION_SEND`/`ACTION_VIEW` al `LinkaViewModel`. El ViewModel normaliza únicamente URL HTTP/HTTPS con host. No hace scraping en UI.
 
-`app/src/main/AndroidManifest.xml` registra `MainActivity` como launcher y como receptor `android.intent.action.SEND`, categoría `DEFAULT`, MIME `text/plain`. La actividad exportada (`exported=true`) recibe enlaces de navegadores y apps que comparten texto. `launchMode="singleTop"` permite tratar enlaces posteriores en `onNewIntent`.
+`LinkaUiState` concentra barra, URL cargada, flag detección, trabajo de inspección, `ExtractedMedia` y error. La UI observa `StateFlow` con `collectAsState`. Mantener llamadas de red/extracción fuera del main thread.
 
-`MainActivity.onCreate` construye la interfaz y llama `acceptSharedIntent(getIntent())`. `onNewIntent` actualiza el Intent de la actividad y vuelve a procesar el contenido. Se lee `Intent.EXTRA_TEXT`, se extrae la primera URL con `Patterns.WEB_URL`, se quita puntuación final habitual y se antepone `https://` si no venía un esquema.
+`LinkaScreen` presenta barra de dirección, navegador, indicador y botón FAB cuando el navegador detecta un posible medio. El BottomSheet enseña mejor calidad, MP3 y formatos extraídos. La descarga solo inicia tras elección expresa. Mantén visible el estado de error; no afirmes que el medio puede descargarse antes de que el extractor liste formatos.
 
-### Interfaz
+## 7. Navegador/detección
 
-`buildUi()` compone la pantalla con `ScrollView`, `LinearLayout`, `TextView`, `EditText` y `Button`. Los textos visibles están en español. `styles.xml` define el tema base; `MainActivity` aplica la paleta oscura y el acento azul en la UI dinámica. `ic_linka.xml` es un VectorDrawable.
+`BrowserView` se monta con `AndroidView(WebView)`:
 
-El usuario puede:
+- JavaScript y DOM storage están habilitados para páginas normales; file/content access está apagado y mixed content bloqueado.
+- `shouldOverrideUrlLoading` admite solo HTTP y HTTPS.
+- `shouldInterceptRequest` observa extensiones comunes (`mp4`, `m3u8`, `mpd`, audio) y comunica la URL de la página superior como candidata.
+- `onPageFinished` hace una inspección DOM read-only (`video`/`source`) vía `evaluateJavascript`.
+- No se expone `JavascriptInterface` a páginas ajenas. El HTML de terceros se considera no confiable.
+- Detección es solo indicio; no prueba que yt-dlp entienda la página ni que ésta ofrezca un archivo legalmente descargable.
+- Evitar registrar contenido HTML, cookies, URL con tokens firmados o identificadores sensibles en logs.
 
-1. compartir una URL y dejar que Linka la prellene y analice;
-2. pegar una URL y tocar **Analizar enlace**;
-3. iniciar la descarga si la respuesta se reconoce como medio directo.
+El JavaScript consultado devuelve solo un boolean del DOM; no debe ejecutar callbacks privilegiados ni iniciar descargas automáticamente. Si se reemplaza por puente JS, diseñar origin allow-list estricta y demostrar que contenido de subframes/sitios hostiles no puede invocar acciones privilegiadas.
 
-### Validación de dirección
+## 8. Extracción y formatos
 
-`inspectCurrentUrl()` normaliza la entrada, permite solo esquemas HTTP/HTTPS y rechaza estos hosts antes de consultar el contenido:
+`VideoExtractor.inspect(url)` usa `Dispatchers.IO` y `YoutubeDL.getInstance().getInfo(url)`. Filtra formatos con audio o video y los adapta a `MediaFormat(id, label, height, extension, hasVideo, hasAudio, bitrate)`. Prioriza altura y bitrate para presentar opciones.
 
-- `youtube.com` y subdominios, más `youtu.be`;
-- `instagram.com` y subdominios;
-- `facebook.com` y subdominios, más `fb.watch`.
+Selectores:
 
-El bloqueo comprueba el host parseado, no una coincidencia arbitraria en todo el texto de la URL. Si el host se rechaza, la UI no ofrece descarga y sugiere la función oficial del servicio.
+- Mejor video/audio: `bestvideo*+bestaudio/best`.
+- Video individual con audio embebido: usa su `format_id`.
+- Video sin audio: `format_id+bestaudio/best`, y FFmpeg hace merge.
+- Audio MP3: `bestaudio/best`, `-x`, `--audio-format mp3`, `--audio-quality 0`.
+- No agregar cookies, contraseñas, cabeceras extraídas del WebView, flags de impersonation, client spoofing ni bypasses de autenticación.
 
-### Inspección del tipo
+`LinkaApplication.onCreate()` inicializa `YoutubeDL` y `FFmpeg`. Si falla, `extractorReady=false`; ViewModel presenta error y no arranca el servicio.
 
-La red corre en un `ExecutorService` de un hilo único para mantener fluida la UI. `inspectContentType()` hace una petición `HEAD`, con timeout de 8 segundos y seguimiento de redirects. Si el servidor responde 405 o 501, repite con `GET` y `Range: bytes=0-0`. La respuesta se normaliza a minúsculas y sin parámetros MIME.
+El formato puede ser adaptativo; `VideoFormat` API exacta depende de la librería. Al actualizar dependencia, verifica nuevamente nombres/nullability de campos (`formats`, `formatId`, `vcodec`, `acodec`, `height`, `tbr`, `formatNote`).
 
-`isSupportedMediaType()` admite respuestas MIME que empiezan con `audio/` o `video/`. Si el MIME es genérico/ausente y no es `text/html`, también puede reconocer una de estas extensiones en la ruta: `.mp3`, `.m4a`, `.aac`, `.mp4`, `.webm`, `.mov`. Una página HTML o un enlace cuyo tipo no coincida queda fuera del flujo.
+## 9. Descargas en background y almacenamiento
 
-Cuando vuelve una petición asíncrona, la UI solo aplica el resultado si la URL inspeccionada sigue siendo la misma. Los errores de red se convierten en un resultado no compatible; no se conserva ningún estado de autenticación.
+`DownloadService` recibe solo extras internos explícitos: URL, título, `format_id`, audio-only y presencia de audio. Usa `ContextCompat.startForegroundService`, ejecuta `YoutubeDL.execute` en coroutine IO y notifica porcentaje/ETA de red. El progreso estimado se obtiene del crecimiento de archivos temporales en caché; es una aproximación, no velocidad de red exacta suministrada por yt-dlp.
 
-### Descarga
+Al terminar, busca los archivos generados por esta tarea, excluye `.part`, e inserta/copía cada archivo terminado a `MediaStore.Downloads` con `RELATIVE_PATH=Download/Linka` e `IS_PENDING` durante la copia. Si la publicación falla, debe borrar cualquier entrada pendiente y mostrar fallo claro. No añadas permisos amplios de almacenamiento.
 
-`startDownload()` crea `DownloadManager.Request` para la URL inspeccionada. Deriva el nombre del último segmento de ruta; si no hay nombre usa `linka-media`, y reemplaza caracteres fuera de `[A-Za-z0-9._-]` por `_`. La petición guarda en `Environment.DIRECTORY_DOWNLOADS`, permite datos móviles, prohíbe roaming y solicita una notificación visible al terminar.
+El callback yt-dlp usado actualmente proporciona porcentaje y ETA; el estado de FFmpeg se infiere al final del progreso, no es una señal estructurada del wrapper. No presentarlo como telemetría exacta de FFmpeg. El APK de la librería será mucho mayor que el MVP inicial por Python/FFmpeg.
 
-La aplicación no abre streams, no copia cookies, no controla la transferencia byte a byte ni solicita permisos amplios de almacenamiento. `DownloadManager` administra la descarga; las restricciones de red, certificados, redirect o servidor pueden hacer que falle.
+Revisa: cancelación del proceso mediante `destroyProcessById`, exclusión/cola para descargas simultáneas, recuperar servicio tras muerte del proceso, errores de falta de espacio, notificación y limpieza de archivos temporales. No declarar que estas capacidades existen si no están implementadas.
 
-## 6. Privacidad y seguridad
+## 10. Compilación y control de calidad
 
-- Único permiso declarado por la app: `android.permission.INTERNET`.
-- No existe backend Linka al que se envíen enlaces.
-- No se han agregado SDKs de analítica, publicidad o cuentas.
-- La dirección se consulta directamente desde el teléfono y se vuelve a entregar a `DownloadManager` para descargar.
-- El usuario debe ser dueño del archivo o tener permiso para conservarlo.
-- La app permite HTTP además de HTTPS actualmente; no describirla como HTTPS-only.
-- Solo dominios sociales explícitos están en la lista de rechazo. No prometer que sea una lista exhaustiva de toda web con restricciones.
-- No se incorpora en Git ninguna llave SSH privada, deploy key, secreto de firma, token o contraseña.
-- El repositorio ahora es público; todos los archivos y todo el historial Git son visibles. Revisar secretos antes de añadir cualquier archivo o commit.
+El repositorio no trae Gradle Wrapper. CI instala Gradle 9.6.0; tarea `assembleDebug`; APK `app/build/outputs/apk/debug/app-debug.apk`, renombrado como `linka.apk` en artifact/Release. Firma debug, no Play signing.
 
-## 7. Versiones, CI y Releases
+Comando local si Android Studio/Gradle adecuado está configurado: `gradle --no-daemon --stacktrace :app:assembleDebug`.
 
-El workflow `.github/workflows/android.yml` ejecuta el job `build` en cada push a `main`, en tags `v*` y manualmente (`workflow_dispatch`). Usa checkout v6, setup-java v6, setup-gradle v6 (Gradle 9.6.0, cache básico), upload-artifact v6 y Android SDK disponible en runner. El artefacto de Actions se llama `linka.apk` y se conserva 30 días.
+No hay suite de tests instrumentados aún. CI valida compilación, no un flujo real con redes sociales. Antes de afirmar soporte de un sitio, comprobar extracción autorizada en Android real, selección de formato, merge, segundo plano, permiso de notificaciones, MediaStore y ruta final. No añadir/ejecutar tests salvo solicitud explícita del usuario; la compilación CI es un build de release solicitado, no sustituye pruebas en dispositivo.
 
-Para tags `v*`, el job `release` espera a `build`, descarga el artefacto y crea/actualiza un GitHub Release con `softprops/action-gh-release@v3`. Solo el job de publicación tiene `contents: write`; el de compilación tiene lectura. El Release incluye `linka.apk` y notas automáticas de GitHub.
+## 11. CI, versiones y publicación
 
-Cada publicación estándar sube el código y genera la próxima versión patch:
+`.github/workflows/android.yml` build en pushes a `main`, tags `v*` y `workflow_dispatch`; job de tag sube el `linka.apk` a Release. El publicador de servidor incrementa patch y `versionCode`, sincroniza `versionName`, crea commit/tag y empuja ambos.
 
-1. lee el último tag `vMAJOR.MINOR.PATCH`;
-2. incrementa `PATCH` y `versionCode`, y actualiza `versionName` en `app/build.gradle`;
-3. crea un commit en `main`;
-4. empuja `main` y una etiqueta anotada como `v1.0.1`;
-5. GitHub Actions compila el APK y adjunta el archivo al Release correspondiente.
-
-Los cambios de documentación también crean una nueva versión/Release, porque el flujo solicitado publica un APK por tanda de cambios. Si no hay cambios preparados, el script servidor termina sin commit ni Release. No reutilizar etiquetas publicadas.
-
-## 8. Flujo de publicación de un solo comando
-
-### Windows / estación que edita el proyecto
-
-Desde PowerShell, en la raíz del clon, ejecutar:
+Desde PowerShell en raíz del clon:
 
 ```powershell
 .\publish-linka.ps1 -Message "Describe el cambio"
 ```
 
-El script:
+El script copia archivos no ignorados y propagará eliminaciones a `/home/ricardo/proyects/Linka`, ejecuta `sync-to-github.sh`, sube commit/tag y refresca el clon local tras éxito. Requiere Git, OpenSSH y alias `serveras`. Cada publicación de cambios genera Release con APK.
 
-1. obtiene los archivos versionados, nuevos no ignorados y eliminados del árbol local;
-2. copia cada archivo al clon canónico `/home/ricardo/proyects/Linka` por SCP y propaga eliminaciones;
-3. ejecuta `sync-to-github.sh` por SSH;
-4. espera resultado correcto del commit, push y tag;
-5. cambia el remoto local a HTTPS público, hace fetch y alinea el clon de Windows con `origin/main`.
-
-Requisitos de la estación: Windows PowerShell, Git, OpenSSH `ssh`/`scp`, conectividad SSH y alias `serveras` correctamente configurado. El mensaje es una línea. El script restringe nombres de archivo a letras ASCII, números, puntos, guion, guion bajo y `/` para no interpolar rutas arbitrarias en comandos SSH.
-
-### Servidor
-
-El script de servidor vive en `sync-to-github.sh`; debe conservar permiso ejecutable. Su identidad Git local es Ricardo Luciano con correo noreply de GitHub. Usa la clave dedicada `~/.ssh/linka_github` con `IdentitiesOnly=yes`; no depende de un token personal.
-
-La invocación de bajo nivel para cambios ya copiados al servidor es:
+Comando de bajo nivel, solo para cambios ya sincronizados con el servidor:
 
 ```bash
 cd /home/ricardo/proyects/Linka
 ./sync-to-github.sh "Describe el cambio" --release
 ```
 
-El camino recomendado para el equipo que trabaja desde Windows es el publicador PowerShell de un solo comando. Los cambios externos al servidor (por ejemplo, merge de PRs) deben incorporarse al checkout antes de volver a publicar. Si `git pull --rebase` detecta un conflicto real, detenerse y resolverlo; no usar `reset --hard` en el servidor.
+No reutilizar una etiqueta existente. Si el workflow falla, inspeccionar el run antes de volver a publicar; mantener repo y servidor sincronizados. El usuario autorizó este flujo de publicación de un solo comando para cambios en el proyecto.
 
-### Estado esperado al terminar
+## 12. Checklist de cambios
 
-- La carpeta canónica del servidor está en `main`, limpia y apunta a `origin/main`.
-- El repo público contiene el mismo contenido y commit que el servidor.
-- La etiqueta `vX.Y.Z` apunta a ese release commit.
-- GitHub Actions muestra `build` y `release` satisfactorios.
-- `linka.apk` aparece como asset en la página del Release.
-- La estación Windows se actualiza a `origin/main` cuando el publicador finaliza con éxito.
+1. Confirma el estado de Git y conserva cambios ajenos.
+2. Mantén UI, web detector, extractor, servicio y storage en sus responsabilidades actuales; refactoriza a módulos Gradle solo si hay una razón concreta.
+3. Revisa esquema HTTP/S, entradas IPC, filenames, fallos de medios parciales, no reutilizar cookies ni persistir datos privados.
+4. Actualiza README y este archivo al cambiar capacidades, permisos, dependencias/licencia, estructura o publicación.
+5. Compila `assembleDebug`, revisa el workflow y confirma el APK del tag. Una compilación correcta no prueba compatibilidad del extractor con todos los sitios.
+6. Usa el comando único autorizado para sincronizar/publicar; no metas credenciales en Git.
 
-Si el build falla, inspeccionar el job `build` antes de repetir la publicación. Si `build` pasa y el job `release` falla, revisar el permiso `contents: write`, el artefacto `linka.apk` y el log de `softprops/action-gh-release`; corregir y reintentar el job, sin crear otra etiqueta para el mismo cambio.
+## 13. Estado de producto previo
 
-## 9. Convenciones de mantenimiento
-
-- Mantener el código UI y el flujo de share en `MainActivity.java` mientras siga siendo una única pantalla pequeña. Extraer clases cuando exista una responsabilidad independiente que lo justifique.
-- La red nunca debe ejecutarse en el hilo principal.
-- Evitar permisos que no hagan falta y nunca guardar credenciales de plataformas externas.
-- Mantener identificadores, `namespace` y package Java alineados en `app/build.gradle` y el árbol fuente.
-- Mantener `versionCode` creciente y `versionName` igual al tag de Release tras cada publicación.
-- Si se cambia el proceso de publicación, actualizar juntos `README.md`, este `CODEX.md`, `publish-linka.ps1`, `sync-to-github.sh` y el workflow, y hacer una publicación de extremo a extremo.
-- Añadir y ejecutar tests solo cuando el usuario lo pida; la comprobación de Release requiere además observar el workflow real de GitHub Actions.
-- No afirmar que se descargan plataformas sociales, hay transcodificación, firma de distribución o pruebas en dispositivo hasta que estén implementadas y verificadas.
-
-## 10. Estado base conocido
-
-- Primera versión publicada: `v1.0.0`.
-- Implementación: share target, entrada manual, inspección MIME, bloqueo explícito de plataformas sociales y descarga directa con `DownloadManager`.
-- Build CI: disponible en la pestaña **Actions**.
-- Release con APK: disponible en **Releases**.
-- Test suite de Android: aún no existe.
-- UI: pantalla nativa programática; no se usa Compose ni layout XML para la pantalla.
-- Firma: debug; no hay keystore privado ni firma de Play Store.
+`v1.0.1` era una demo Java mínima que rechazaba de forma explícita plataformas sociales y solo permitía URLs directas. Esa versión **no cumplía** la intención original del usuario. La rama actual reemplaza esa base con Compose/WebView/yt-dlp/FFmpeg; no describir el APK anterior como esta arquitectura.
