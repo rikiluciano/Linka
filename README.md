@@ -11,8 +11,27 @@ Linka es una aplicación Android personal que recibe enlaces compartidos y desca
 
 Los enlaces de YouTube, Instagram y Facebook se rechazan con una explicación. Usa las opciones oficiales de descarga del servicio o enlaces directos a archivos propios o autorizados. El MVP conserva el formato y la resolución del archivo fuente.
 
-## Compilar
+## Compilar e instalar
 
-Abre el proyecto en Android Studio con JDK 17, Android SDK API 37 y Gradle 9.6.0 (AGP 9.4.0). La acción de GitHub compila el APK de depuración y lo publica como artefacto descargable llamado linka.apk.
+Abre el proyecto en Android Studio con JDK 17, Android SDK API 37 y Gradle 9.6.0 (AGP 9.4.0). La acción `Android APK` compila el APK de depuración `linka.apk`.
 
-Para instalarlo en tu dispositivo, descarga el artefacto de la acción más reciente. El proyecto no incluye una clave de firma privada; las claves deben mantenerse fuera del repositorio.
+Los APK de compilación continua aparecen como artefactos en GitHub Actions. Las versiones etiquetadas como `vMAJOR.MINOR.PATCH` se publican en GitHub Releases con el APK adjunto. El APK está firmado con la clave de depuración de CI; no se incluye una clave privada de firma de distribución.
+
+## Sincronización del servidor
+
+La carpeta de trabajo del servidor es `/home/ricardo/proyects/Linka`. La clave SSH dedicada del servidor tiene acceso de escritura únicamente a este repositorio.
+
+Después de copiar los cambios completos a esa carpeta, ejecuta:
+
+```bash
+cd /home/ricardo/proyects/Linka
+./sync-to-github.sh "Describe el cambio"
+```
+
+El script incorpora los cambios, crea un commit y los sube a `main`. Para publicar una versión y disparar la creación del Release con su APK:
+
+```bash
+./sync-to-github.sh "Preparar Linka 1.0.0" v1.0.0
+```
+
+Primero comprueba que el nombre de la etiqueta no esté ya usado. Cada cambio subido queda guardado en el historial de Git.
