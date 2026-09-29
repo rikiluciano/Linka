@@ -14,13 +14,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -84,6 +84,12 @@ fun LinkaScreen(model: LinkaViewModel) {
                 Surface(color = MaterialTheme.colorScheme.surface) {
                     Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
                         Text("Linka", style = MaterialTheme.typography.titleLarge, color = LinkaColors.primary)
+                        Text(
+                            "Navega y guarda contenido que tengas permiso para descargar",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                            modifier = Modifier.padding(bottom = 10.dp),
+                        )
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
                                 value = state.address,
@@ -99,12 +105,36 @@ fun LinkaScreen(model: LinkaViewModel) {
                     }
                 }
             },
-            floatingActionButton = {
-                if (state.detected) {
-                    FloatingActionButton(onClick = {
-                        showQualities = true
-                        model.extractFormats()
-                    }) { Text("↓") }
+            bottomBar = {
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 5.dp,
+                    shadowElevation = 10.dp,
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = when {
+                                state.pageUrl == null -> "Pega un enlace o navega hasta un video"
+                                state.detected -> "Video detectado · toca para elegir calidad"
+                                else -> "¿Hay un video en esta página? Analiza el enlace"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Button(
+                            onClick = {
+                                showQualities = true
+                                model.extractFormats()
+                            },
+                            enabled = state.pageUrl != null && !state.extracting,
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                        ) {
+                            Text(if (state.extracting) "Analizando página…" else "Buscar opciones de descarga  ↓")
+                        }
+                    }
                 }
             },
         ) { innerPadding ->
@@ -135,17 +165,34 @@ fun LinkaScreen(model: LinkaViewModel) {
                         style = MaterialTheme.typography.bodySmall,
                     )
                     if (state.extracting) {
-                        CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally).padding(24.dp))
-                    } else {
-                        Button(onClick = { startDownload(DownloadQuality.Best) }, Modifier.fillMaxWidth()) {
-                            Text("Mejor calidad disponible")
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            CircularProgressIndicator()
+                            Text("Buscando formatos disponibles…")
                         }
-                        TextButton(onClick = { startDownload(DownloadQuality.AudioMp3) }) {
-                            Text("Extraer audio MP3 · máxima calidad")
-                        }
-                        state.media?.let { media ->
-                            Text(media.title, Modifier.padding(vertical = 8.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            LazyColumn {
+                    }
+                    Button(onClick = { startDownload(DownloadQuality.Best) }, Modifier.fillMaxWidth()) {
+                        Text("Descargar en la mejor calidad")
+                    }
+                    TextButton(onClick = { startDownload(DownloadQuality.AudioMp3) }) {
+                        Text("Descargar solo audio · MP3")
+                    }
+                    state.error?.let {
+                        Text(
+                            it,
+                            Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            color = Color(0xFFB3261E),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    state.media?.let { media ->
+                        Text(media.title, Modifier.padding(vertical = 8.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        if (media.formats.isNotEmpty()) {
+                            Text("Calidad y formatos detectados", style = MaterialTheme.typography.titleSmall)
+                            LazyColumn(Modifier.height(240.dp)) {
                                 items(media.formats, key = MediaFormat::id) { format ->
                                     TextButton(
                                         onClick = { startDownload(DownloadQuality.Format(format)) },
@@ -156,16 +203,16 @@ fun LinkaScreen(model: LinkaViewModel) {
                                 }
                             }
                         }
-                        if (state.media?.formats.isNullOrEmpty() && !state.extracting) {
-                            Text("No se listaron formatos. Puedes intentar la mejor calidad disponible.", Modifier.padding(vertical = 12.dp))
-                        }
+                    }
+                    if (state.media?.formats.isNullOrEmpty() && !state.extracting) {
+                        Text(
+                            "No se listaron formatos. Puedes probar la mejor calidad; algunos sitios requieren iniciar sesión o no son compatibles.",
+                            Modifier.padding(vertical = 12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
                 }
             }
-        }
-
-        state.error?.let { message ->
-            // Errors remain in the address bar for screen readers and are cleared on navigation.
         }
     }
 }

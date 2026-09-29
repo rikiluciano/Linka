@@ -55,7 +55,9 @@ class LinkaViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun extractFormats() {
-        val url = mutableState.value.pageUrl ?: return
+        val current = mutableState.value
+        if (current.extracting || current.media != null) return
+        val url = current.pageUrl ?: return
         if (!(getApplication<LinkaApplication>().extractorReady)) {
             mutableState.update { it.copy(error = "El motor multimedia no pudo inicializarse en este dispositivo.") }
             return
