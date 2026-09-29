@@ -52,6 +52,9 @@ Linka/
 │       │   ├── download/DownloadService.kt    # FGS, progreso, MediaStore
 │       │   ├── extractor/MediaFormat.kt       # dominio y selector de calidad
 │       │   ├── extractor/VideoExtractor.kt    # getInfo, filtros, request yt-dlp
+│       │   ├── update/AppUpdate.kt              # GitHub latest release, digest y estados
+│       │   ├── update/AppUpdateService.kt       # Descarga APK privada con progreso
+│       │   ├── update/AppInstaller.kt           # PackageInstaller y respuesta del sistema
 │       │   └── ui/
 │       │       ├── BrowserView.kt              # WebView y detección de medios
 │       │       ├── LinkaScreen.kt              # Compose, barra inferior y BottomSheet
@@ -78,6 +81,7 @@ No hay módulos Gradle `:domain`/`:data` por separado todavía. Los paquetes den
 - `INTERNET` para WebView/extractor.
 - `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`, `FOREGROUND_SERVICE_MEDIA_PROCESSING` para descargas y procesamiento en segundo plano según API.
 - `POST_NOTIFICATIONS` se solicita cuando el usuario inicia una descarga en API 33+.
+- `REQUEST_INSTALL_PACKAGES` permite consultar si Linka puede solicitar la instalación de APK. En Android 8+ el usuario puede tener que habilitar "Permitir instalar apps" para Linka; no equivale a instalar silenciosamente.
 - No pedir `READ/WRITE_EXTERNAL_STORAGE` ni `MANAGE_EXTERNAL_STORAGE`; archivos temporales están en caché privada y los terminados se publican mediante `MediaStore.Downloads`.
 - `DownloadService` no exportado. La Activity launcher exportada recibe enlaces `ACTION_SEND text/plain`; valida esquemas HTTP/HTTPS antes de navegar/extracción.
 
@@ -90,6 +94,8 @@ Los servicios foreground tienen requisitos/limites de Android dependientes de la
 `LinkaUiState` concentra barra, URL cargada, flag detección, trabajo de inspección, `ExtractedMedia` y error. La UI observa `StateFlow` con `collectAsState`. Mantener llamadas de red/extracción fuera del main thread.
 
 `LinkaScreen` presenta barra de dirección, navegador y una barra inferior persistente para buscar opciones; no depende de que el detector automático acierte. El BottomSheet enseña mejor calidad, MP3 y formatos extraídos. La descarga solo inicia tras elección expresa. Mantén visibles los errores de análisis y el resultado del servicio.
+
+La comprobación de actualización se inicia al crear `LinkaViewModel` y ejecuta la petición a GitHub en IO sin bloquear Compose. Si no hay versión nueva, no muestra aviso; un error de red tampoco bloquea la navegación. Si encuentra una versión más nueva, `LinkaScreen` pregunta aceptar/posponer. Aceptar inicia `AppUpdateService`; al terminar, la UI ofrece abrir el flujo nativo de instalación. Al volver de Ajustes de fuentes desconocidas, la misma tarjeta permite continuar.
 
 ## 7. Navegador/detección
 
@@ -109,11 +115,13 @@ El JavaScript consultado devuelve solo un boolean del DOM; no debe ejecutar call
 
 `VideoExtractor.inspect(url)` usa `Dispatchers.IO` y `YoutubeDL.getInstance().getInfo(url)`. Filtra formatos con audio o video y los adapta a `MediaFormat(id, label, height, extension, hasVideo, hasAudio, bitrate)`. Prioriza altura y bitrate para presentar opciones.
 
+`ExtractedMedia.videoQualities()` agrupa las pistas por altura real y conserva un candidato de cada resolución; `LinkaScreen` solo muestra esas resoluciones reales, marca la máxima del origen y deja elegir video o audio antes de iniciar. Si una plataforma ofrece 480p como máximo, no se presenta 720p/1080p como si existieran. Para audio se escoge `bestaudio/best` y se convierte a MP3 con `--audio-quality 0` (V0, mejor modo VBR de FFmpeg); volver a codificar un audio fuente de menor calidad no recupera información perdida.
+
 Selectores:
 
 - Mejor video/audio: `bestvideo*+bestaudio/best`.
 - Video individual con audio embebido: usa su `format_id`.
-- Video sin audio: `format_id+bestaudio/best`, y FFmpeg hace merge.
+- Video sin audio: `format_id+bestaudio/best[height<=alturaElegida]`, y FFmpeg hace merge con la pista de audio compatible sin exceder la resolución elegida.
 - Audio MP3: `bestaudio/best`, `-x`, `--audio-format mp3`, `--audio-quality 0`.
 - No agregar cookies, contraseñas, cabeceras extraídas del WebView, flags de impersonation, client spoofing ni bypasses de autenticación.
 
@@ -131,17 +139,36 @@ El callback yt-dlp usado actualmente proporciona porcentaje y ETA; el estado de 
 
 Revisa: cancelación del proceso mediante `destroyProcessById`, exclusión/cola para descargas simultáneas, recuperar servicio tras muerte del proceso, errores de falta de espacio, notificación y limpieza de archivos temporales. No declarar que estas capacidades existen si no están implementadas.
 
-## 10. Compilación y control de calidad
+## 10. Actualización de la aplicación
 
-El repositorio no trae Gradle Wrapper. CI instala Gradle 9.6.0; tarea `assembleDebug`; APK `app/build/outputs/apk/debug/app-debug.apk`, renombrado como `linka.apk` en artifact/Release. Firma debug, no Play signing.
+`AppUpdateChecker` consulta `https://api.github.com/repos/rikiluciano/Linka/releases/latest`, ignora drafts/prereleases y compara el tag con `versionName`. Espera que `linka.apk` publique el campo `digest` SHA-256 que GitHub expone en assets de Release. Si falta o no es válido, no ofrece una descarga insegura.
+
+`AppUpdateService` descarga por HTTPS a `cacheDir/app-updates`, muestra una notificación foreground con progreso y verifica SHA-256, package name, incremento de `versionCode` y certificado contra la app instalada. Solo el APK verificado se entrega a `AppInstaller`. El instalador escribe una sesión `PackageInstaller`; `AppInstallReceiver` maneja `STATUS_PENDING_USER_ACTION`, éxito y errores. Android muestra la confirmación final; una app normal no puede autoactualizarse en silencio.
+
+### Firma estable de Releases
+
+Los APK de desarrollo `assembleDebug` no deben distribuirse como actualizaciones. Tags `v*` usan `assembleRelease` y requieren una clave estable. Configura en GitHub (Settings → Secrets and variables → Actions):
+
+- `LINKA_RELEASE_KEYSTORE_BASE64`: keystore JKS codificado en Base64.
+- `LINKA_KEYSTORE_PASSWORD`: contraseña del keystore.
+- `LINKA_KEY_ALIAS`: alias de la clave.
+- `LINKA_KEY_PASSWORD`: contraseña de la clave.
+
+El almacén y las contraseñas nunca entran al repositorio. Conserva copias de respaldo privadas: perder la clave impide actualizar la instalación existente. Una versión instalada antes de adoptar la clave estable puede requerir una única desinstalación; tras instalar un Release con la firma fija, los siguientes Releases podrán reemplazar la app existente.
+
+Esta ruta `PackageInstaller`/`REQUEST_INSTALL_PACKAGES` solo aplica al APK directo de uso personal. Antes de distribuir por Google Play, retirar el permiso y el instalador APK propio, y migrar el aviso/flujo de actualización a Play In-App Updates. La política de Play prohíbe usar `REQUEST_INSTALL_PACKAGES` para autoactualizar la propia app.
+
+## 11. Compilación y control de calidad
+
+El repositorio no trae Gradle Wrapper. CI instala Gradle 9.6.0; pushes a `main` ejecutan `assembleDebug` como artifact de desarrollo. Tags `v*` ejecutan `assembleRelease` con la clave estable de Actions y publican `linka.apk`. La build firmada requiere los cuatro secretos anteriores.
 
 Comando local si Android Studio/Gradle adecuado está configurado: `gradle --no-daemon --stacktrace :app:assembleDebug`.
 
 No hay suite de tests instrumentados aún. CI valida compilación, no un flujo real con redes sociales. Antes de afirmar soporte de un sitio, comprobar extracción autorizada en Android real, selección de formato, merge, segundo plano, permiso de notificaciones, MediaStore y ruta final. No añadir/ejecutar tests salvo solicitud explícita del usuario; la compilación CI es un build de release solicitado, no sustituye pruebas en dispositivo.
 
-## 11. CI, versiones y publicación
+## 12. CI, versiones y publicación
 
-`.github/workflows/android.yml` build en pushes a `main`, tags `v*` y `workflow_dispatch`; job de tag sube el `linka.apk` a Release. El publicador de servidor incrementa patch y `versionCode`, sincroniza `versionName`, crea commit/tag y empuja ambos.
+`.github/workflows/android.yml` construye debug en pushes a `main` y Release firmado en tags `v*`; el job de tag sube `linka.apk` al Release. `workflow_dispatch` compila debug. El publicador de servidor incrementa patch y `versionCode`, sincroniza `versionName`, crea commit/tag y empuja ambos.
 
 Desde PowerShell en raíz del clon:
 
@@ -160,7 +187,7 @@ cd /home/ricardo/proyects/Linka
 
 No reutilizar una etiqueta existente. Si el workflow falla, inspeccionar el run antes de volver a publicar; mantener repo y servidor sincronizados. El usuario autorizó este flujo de publicación de un solo comando para cambios en el proyecto.
 
-## 12. Checklist de cambios
+## 13. Checklist de cambios
 
 1. Confirma el estado de Git y conserva cambios ajenos.
 2. Mantén UI, web detector, extractor, servicio y storage en sus responsabilidades actuales; refactoriza a módulos Gradle solo si hay una razón concreta.
@@ -169,6 +196,6 @@ No reutilizar una etiqueta existente. Si el workflow falla, inspeccionar el run 
 5. Compila `assembleDebug`, revisa el workflow y confirma el APK del tag. Una compilación correcta no prueba compatibilidad del extractor con todos los sitios.
 6. Usa el comando único autorizado para sincronizar/publicar; no metas credenciales en Git.
 
-## 13. Estado de producto previo
+## 14. Estado de producto previo
 
 `v1.0.1` era una demo Java mínima que rechazaba de forma explícita plataformas sociales y solo permitía URLs directas. Esa versión **no cumplía** la intención original del usuario. La rama actual reemplaza esa base con Compose/WebView/yt-dlp/FFmpeg; no describir el APK anterior como esta arquitectura.

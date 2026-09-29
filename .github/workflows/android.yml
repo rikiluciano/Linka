@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: Build debug APK
+    name: Build APK
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -28,9 +28,35 @@ jobs:
         with:
           gradle-version: '9.6.0'
           cache-provider: basic
-      - name: Build APK
+      - name: Build debug APK for branch builds
+        if: startsWith(github.ref, 'refs/heads/')
         run: gradle --no-daemon --stacktrace assembleDebug
-      - name: Give APK a stable name
+      - name: Verify release signing secrets
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          KEYSTORE_BASE64: ${{ secrets.LINKA_RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.LINKA_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.LINKA_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.LINKA_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || { echo "Missing LINKA_RELEASE_KEYSTORE_BASE64"; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo "Missing LINKA_KEYSTORE_PASSWORD"; exit 1; }
+          test -n "$KEY_ALIAS" || { echo "Missing LINKA_KEY_ALIAS"; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo "Missing LINKA_KEY_PASSWORD"; exit 1; }
+      - name: Build signed release APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          LINKA_KEYSTORE_PATH: ${{ runner.temp }}/linka-release.jks
+          LINKA_KEYSTORE_PASSWORD: ${{ secrets.LINKA_KEYSTORE_PASSWORD }}
+          LINKA_KEY_ALIAS: ${{ secrets.LINKA_KEY_ALIAS }}
+          LINKA_KEY_PASSWORD: ${{ secrets.LINKA_KEY_PASSWORD }}
+          KEYSTORE_BASE64: ${{ secrets.LINKA_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$LINKA_KEYSTORE_PATH"
+          gradle --no-daemon --stacktrace assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk linka.apk
+      - name: Give debug APK a stable name
+        if: startsWith(github.ref, 'refs/heads/')
         run: cp app/build/outputs/apk/debug/app-debug.apk linka.apk
       - name: Upload APK artifact
         uses: actions/upload-artifact@v6
@@ -48,7 +74,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download the APK artifact
+      - name: Download the signed APK artifact
         uses: actions/download-artifact@v7
         with:
           name: linka.apk

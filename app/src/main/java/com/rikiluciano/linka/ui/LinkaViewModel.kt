@@ -9,11 +9,20 @@ import com.rikiluciano.linka.download.DownloadFeedback
 import com.rikiluciano.linka.extractor.DownloadQuality
 import com.rikiluciano.linka.extractor.ExtractedMedia
 import com.rikiluciano.linka.extractor.VideoExtractor
+import com.rikiluciano.linka.update.AppInstaller
+import com.rikiluciano.linka.update.AppRelease
+import com.rikiluciano.linka.update.AppUpdateChecker
+import com.rikiluciano.linka.update.AppUpdateEvents
+import com.rikiluciano.linka.update.AppUpdateService
+import com.rikiluciano.linka.update.AppUpdateState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 
 data class LinkaUiState(
     val address: String = "https://",
@@ -24,6 +33,8 @@ data class LinkaUiState(
     val media: ExtractedMedia? = null,
     val error: String? = null,
     val downloadFeedback: DownloadFeedback? = null,
+    val appUpdate: AppUpdateState = AppUpdateState.Checking,
+    val hideUpdatePrompt: Boolean = false,
 )
 
 class LinkaViewModel(application: Application) : AndroidViewModel(application) {
@@ -33,10 +44,49 @@ class LinkaViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
+            AppUpdateEvents.state.collect { update -> mutableState.update { it.copy(appUpdate = update) } }
+        }
+        checkForAppUpdate()
+        viewModelScope.launch {
             DownloadService.feedback.collect { feedback ->
                 if (feedback != null) mutableState.update { it.copy(downloadFeedback = feedback) }
             }
         }
+    }
+
+    /** Checks the public GitHub release API without blocking the first screen. */
+    fun checkForAppUpdate() {
+        if (AppUpdateEvents.state.value is AppUpdateState.Downloading ||
+            AppUpdateEvents.state.value is AppUpdateState.ReadyToInstall ||
+            AppUpdateEvents.state.value is AppUpdateState.Installing ||
+            mutableState.value.appUpdate is AppUpdateState.Downloading ||
+            mutableState.value.appUpdate is AppUpdateState.ReadyToInstall ||
+            mutableState.value.appUpdate is AppUpdateState.Installing
+        ) return
+        mutableState.update { it.copy(hideUpdatePrompt = false) }
+        AppUpdateEvents.set(AppUpdateState.Checking)
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { AppUpdateChecker.check(getApplication()) } }
+                .onSuccess { release ->
+                    AppUpdateEvents.set(release?.let(AppUpdateState::Available) ?: AppUpdateState.UpToDate)
+                }
+                .onFailure { error ->
+                    android.util.Log.w("Linka", "No se pudo consultar el release de Linka", error)
+                    AppUpdateEvents.set(AppUpdateState.Dismissed)
+                }
+        }
+    }
+
+    fun dismissAppUpdate() { mutableState.update { it.copy(hideUpdatePrompt = true) } }
+
+    fun downloadAppUpdate(release: AppRelease) {
+        runCatching { AppUpdateService.start(getApplication(), release) }
+            .onFailure { AppUpdateEvents.set(AppUpdateState.Failed(release.version, it.message ?: "No se pudo iniciar la descarga.")) }
+    }
+
+    fun installAppUpdate(release: AppRelease, apkPath: String) {
+        runCatching { AppInstaller.install(getApplication(), File(apkPath), release.version) }
+            .onFailure { AppUpdateEvents.set(AppUpdateState.Failed(release.version, it.message ?: "No se pudo iniciar el instalador.")) }
     }
 
     fun editAddress(value: String) = mutableState.update { it.copy(address = value, error = null) }
@@ -92,6 +142,11 @@ class LinkaViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
         }
+    }
+
+    fun retryExtractFormats() {
+        mutableState.update { it.copy(media = null, error = null) }
+        extractFormats()
     }
 
     fun download(quality: DownloadQuality) {

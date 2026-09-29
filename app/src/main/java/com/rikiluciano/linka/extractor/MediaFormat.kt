@@ -12,7 +12,19 @@ data class MediaFormat(
     val needsMerge: Boolean get() = hasVideo && !hasAudio
 }
 
-data class ExtractedMedia(val title: String, val formats: List<MediaFormat>)
+data class ExtractedMedia(val title: String, val formats: List<MediaFormat>) {
+    /** One useful format per source resolution; never fabricates a resolution the source lacks. */
+    fun videoQualities(): List<MediaFormat> = formats.asSequence()
+        .filter { it.hasVideo && it.height > 0 }
+        .groupBy(MediaFormat::height)
+        .values
+        .mapNotNull { variants ->
+            variants.maxWithOrNull(compareBy<MediaFormat> { if (it.hasAudio) 0 else 1 }.thenBy { it.bitrate })
+        }
+        .sortedByDescending(MediaFormat::height)
+
+    fun hasAudioSource(): Boolean = formats.any(MediaFormat::hasAudio)
+}
 
 sealed interface DownloadQuality {
     data object Best : DownloadQuality
@@ -22,6 +34,8 @@ sealed interface DownloadQuality {
     fun selector(): String = when (this) {
         Best -> "bestvideo*+bestaudio/best"
         AudioMp3 -> "bestaudio/best"
-        is Format -> if (format.needsMerge) "${format.id}+bestaudio/best" else format.id
+        is Format -> if (format.needsMerge) {
+            "${format.id}+bestaudio/best[height<=${format.height}]"
+        } else format.id
     }
 }

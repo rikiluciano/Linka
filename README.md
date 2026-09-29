@@ -23,12 +23,19 @@ Linka reúne esas tareas en una interfaz Android: navegas a una página, la app 
 - Detección de elementos de video del DOM y solicitudes multimedia comunes (`mp4`, `m3u8`, `mpd` y audio/video directo).
 - Extracción de título y formatos disponibles con el wrapper Android de yt-dlp; antes de analizar o descargar, Linka comprueba y actualiza yt-dlp desde el canal estable de GitHub.
 - Selección automática de la mejor calidad disponible, elección de formato de video y extracción de audio MP3.
+- Selector de video separado del audio: agrupa variantes por resolución, presenta cada altura real disponible (por ejemplo 480p, 720p, 1080p, 1440p, 2160p o 4320p) y omite las que el origen no ofrece. Linka nunca etiqueta una fuente 480p como 1080p ni inventa resolución.
+- Exportación a MP3 con el ajuste V0 de FFmpeg y la mejor pista de audio que la fuente permita. La conversión prioriza calidad perceptual, pero no puede recuperar detalle que ya se perdió en el archivo original.
 - Descarga de flujos de video y audio separados y combinación mediante FFmpeg cuando el formato y el extractor lo permiten.
 - Servicio en primer plano para mantener visible una descarga iniciada por el usuario, con notificación de porcentaje, velocidad estimada y estado de finalización.
 - Publicación del archivo completado en `Descargas/Linka` mediante `MediaStore`, compatible con almacenamiento con ámbito de Android 10 o posterior.
 - Tema oscuro, sin publicidad, analítica, cuentas ni servidor Linka.
+- Comprobación asíncrona de nuevas versiones al abrir Linka, aviso para aceptar o posponer, descarga del APK en almacenamiento privado y verificación SHA-256, paquete y firma antes de instalar.
+- Instalación mediante `PackageInstaller` de Android. El sistema solicita autorización para permitir instalaciones desde Linka si todavía no se concedió, y muestra la confirmación final para reemplazar la versión instalada.
 
 ## Límites y compatibilidad
+
+- Android requiere que el usuario confirme la instalación en su interfaz del sistema. Para migrar desde una versión firmada con una clave debug/efímera, puede hacer falta desinstalarla una vez e instalar el primer APK con la clave estable; las actualizaciones futuras conservarán esa firma.
+- Este actualizador está pensado para la distribución directa del APK durante el uso personal. Antes de publicar Linka en Google Play, se debe retirar el autoactualizador con `REQUEST_INSTALL_PACKAGES` y usar el flujo de actualizaciones de Google Play; la política de Play restringe usar ese permiso para actualizar la propia app.
 
 - yt-dlp admite muchos sitios, pero no existe garantía de que una página concreta sea compatible. Los extractores y los formatos dependen del sitio y de la versión actualizada de yt-dlp.
 - La detección del navegador es heurística. La barra para buscar opciones permanece visible aunque el detector no encuentre un reproductor; esto tampoco garantiza que yt-dlp pueda analizar esa página.
@@ -38,7 +45,7 @@ Linka reúne esas tareas en una interfaz Android: navegas a una página, la app 
 - La calidad máxima depende de las opciones que la fuente ofrezca a la herramienta. MP3 requiere conversión con FFmpeg.
 - Se solicita permiso de notificaciones al iniciar una descarga en Android 13 o posterior. Si se deniega, el sistema puede ocultar la notificación habitual.
 - La librería `youtubedl-android` integra software GPL-3.0. Este proyecto se distribuye bajo GPL-3.0; consulta [LICENSE](LICENSE) y conserva los avisos de terceros.
-- La versión CI actual produce un APK debug-signed; no sustituye una firma de distribución protegida para una publicación en Play Store.
+- Los APK de `main` son de depuración. Los Releases `v*` se firman con una clave privada estable guardada en secretos de GitHub Actions; conserva una copia de respaldo privada, ya que perderla impide actualizar las instalaciones existentes.
 
 ## Flujo técnico
 
@@ -64,6 +71,8 @@ flowchart TD
 4. `LinkaViewModel` mantiene la dirección, la página detectada, el estado de actualización, los formatos, el resultado de la descarga y los errores en `StateFlow`.
 5. `DownloadService` se inicia como servicio en primer plano, intenta actualizar yt-dlp y ejecuta el motor fuera del hilo principal. Un monitor del archivo temporal estima kB/s; el progreso puede variar entre extractores. Los fallos concisos aparecen en la notificación y dentro de Linka.
 6. yt-dlp llama a FFmpeg para combinar pistas o extraer MP3. Linka copia el resultado a `MediaStore.Downloads` y lo deja en `Descargas/Linka`.
+7. Al abrirse, `LinkaViewModel` consulta el endpoint público de releases en IO sin bloquear la interfaz. Si encuentra una versión nueva, `LinkaScreen` pregunta antes de descargar. `AppUpdateService` mantiene la descarga del APK en primer plano y lo guarda en caché privada. Verifica el digest SHA-256 publicado por GitHub, el `applicationId`, el `versionCode` y el certificado.
+8. `AppInstaller` escribe el APK en una sesión de `PackageInstaller`. Android puede pedir habilitar "Permitir instalar apps" para Linka y luego presenta su propia confirmación para sustituir la app.
 
 ## Tecnologías
 
@@ -86,6 +95,7 @@ Linka/
 │   │   ├── MainActivity.kt           # Host de Compose y enlaces compartidos
 │   │   ├── download/DownloadService.kt
 │   │   ├── extractor/                # Formatos, calidades, yt-dlp
+│   │   ├── update/                   # Releases, descarga privada e instalador Android
 │   │   └── ui/                       # Compose, ViewModel y BrowserView
 │   └── res/                          # Icono y recursos Android
 ├── app/build.gradle
@@ -103,7 +113,7 @@ Linka/
 4. Instala `app/build/outputs/apk/debug/app-debug.apk` en un dispositivo Android 10 o posterior.
 5. Navega o comparte un enlace, toca **Buscar opciones de descarga**, elige mejor calidad, MP3 o un formato detectado. La primera comprobación de actualizaciones necesita internet. Autoriza notificaciones si quieres ver el progreso en el panel del sistema.
 
-La compilación CI adjunta `linka.apk` a cada Release creado por una etiqueta `v*`. Descarga la última versión desde [GitHub Releases](https://github.com/rikiluciano/Linka/releases/latest).
+Los pushes a `main` producen un APK de depuración. Cada etiqueta `v*` produce un APK de Release firmado y lo adjunta al release. La publicación firmada requiere los secretos `LINKA_RELEASE_KEYSTORE_BASE64`, `LINKA_KEYSTORE_PASSWORD`, `LINKA_KEY_ALIAS` y `LINKA_KEY_PASSWORD` en GitHub Actions. Descarga la última versión desde [GitHub Releases](https://github.com/rikiluciano/Linka/releases/latest).
 
 ## Publicación del proyecto
 
