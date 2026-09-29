@@ -124,6 +124,15 @@ fun LinkaScreen(model: LinkaViewModel) {
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
+                        state.downloadFeedback?.let { feedback ->
+                            Text(
+                                feedback.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (feedback.isError) Color(0xFFFFB4AB) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                         Button(
                             onClick = {
                                 showQualities = true
@@ -132,7 +141,13 @@ fun LinkaScreen(model: LinkaViewModel) {
                             enabled = state.pageUrl != null && !state.extracting,
                             modifier = Modifier.fillMaxWidth().height(52.dp),
                         ) {
-                            Text(if (state.extracting) "Analizando página…" else "Buscar opciones de descarga  ↓")
+                            Text(
+                                when {
+                                    state.updatingExtractor -> "Actualizando motor…"
+                                    state.extracting -> "Analizando página…"
+                                    else -> "Buscar opciones de descarga  ↓"
+                                },
+                            )
                         }
                     }
                 }
@@ -171,7 +186,7 @@ fun LinkaScreen(model: LinkaViewModel) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             CircularProgressIndicator()
-                            Text("Buscando formatos disponibles…")
+                            Text(if (state.updatingExtractor) "Actualizando yt-dlp y buscando formatos…" else "Buscando formatos disponibles…")
                         }
                     }
                     Button(onClick = { startDownload(DownloadQuality.Best) }, Modifier.fillMaxWidth()) {

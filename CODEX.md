@@ -54,7 +54,7 @@ Linka/
 │       │   ├── extractor/VideoExtractor.kt    # getInfo, filtros, request yt-dlp
 │       │   └── ui/
 │       │       ├── BrowserView.kt              # WebView y detección de medios
-│       │       ├── LinkaScreen.kt              # Compose, barra, FAB y BottomSheet
+│       │       ├── LinkaScreen.kt              # Compose, barra inferior y BottomSheet
 │       │       └── LinkaViewModel.kt           # StateFlow y coordinación UI
 │       └── res/{drawable,values}/              # icono, nombre y tema
 ├── build.gradle                               # AGP y Compose Compiler plugins
@@ -89,7 +89,7 @@ Los servicios foreground tienen requisitos/limites de Android dependientes de la
 
 `LinkaUiState` concentra barra, URL cargada, flag detección, trabajo de inspección, `ExtractedMedia` y error. La UI observa `StateFlow` con `collectAsState`. Mantener llamadas de red/extracción fuera del main thread.
 
-`LinkaScreen` presenta barra de dirección, navegador, indicador y botón FAB cuando el navegador detecta un posible medio. El BottomSheet enseña mejor calidad, MP3 y formatos extraídos. La descarga solo inicia tras elección expresa. Mantén visible el estado de error; no afirmes que el medio puede descargarse antes de que el extractor liste formatos.
+`LinkaScreen` presenta barra de dirección, navegador y una barra inferior persistente para buscar opciones; no depende de que el detector automático acierte. El BottomSheet enseña mejor calidad, MP3 y formatos extraídos. La descarga solo inicia tras elección expresa. Mantén visibles los errores de análisis y el resultado del servicio.
 
 ## 7. Navegador/detección
 
@@ -117,13 +117,13 @@ Selectores:
 - Audio MP3: `bestaudio/best`, `-x`, `--audio-format mp3`, `--audio-quality 0`.
 - No agregar cookies, contraseñas, cabeceras extraídas del WebView, flags de impersonation, client spoofing ni bypasses de autenticación.
 
-`LinkaApplication.onCreate()` inicializa `YoutubeDL` y `FFmpeg`. Si falla, `extractorReady=false`; ViewModel presenta error y no arranca el servicio.
+`LinkaApplication.onCreate()` inicializa `YoutubeDL` y `FFmpeg`. Si falla, `extractorReady=false`; ViewModel presenta error y no arranca el servicio. Antes del primer análisis o descarga por proceso, `ensureYtDlpUpdated()` actualiza desde `YoutubeDL.UpdateChannel.STABLE` en IO, con `Mutex` para impedir escrituras concurrentes. Si la actualización falla durante el análisis se intenta el binario incluido; durante la descarga también se prueba el binario incluido.
 
 El formato puede ser adaptativo; `VideoFormat` API exacta depende de la librería. Al actualizar dependencia, verifica nuevamente nombres/nullability de campos (`formats`, `formatId`, `vcodec`, `acodec`, `height`, `tbr`, `formatNote`).
 
 ## 9. Descargas en background y almacenamiento
 
-`DownloadService` recibe solo extras internos explícitos: URL, título, `format_id`, audio-only y presencia de audio. Usa `ContextCompat.startForegroundService`, ejecuta `YoutubeDL.execute` en coroutine IO y notifica porcentaje/ETA de red. El progreso estimado se obtiene del crecimiento de archivos temporales en caché; es una aproximación, no velocidad de red exacta suministrada por yt-dlp.
+`DownloadService` recibe solo extras internos explícitos: URL, título, `format_id`, audio-only y presencia de audio. Usa `ContextCompat.startForegroundService`, intenta actualizar yt-dlp, ejecuta `YoutubeDL.execute` en coroutine IO y notifica el estado. `DownloadService.feedback` expone por `StateFlow` el resultado conciso hacia la UI. El progreso estimado se obtiene del crecimiento de archivos temporales en caché; es una aproximación, no velocidad de red exacta suministrada por yt-dlp.
 
 Al terminar, busca los archivos generados por esta tarea, excluye `.part`, e inserta/copía cada archivo terminado a `MediaStore.Downloads` con `RELATIVE_PATH=Download/Linka` e `IS_PENDING` durante la copia. Si la publicación falla, debe borrar cualquier entrada pendiente y mostrar fallo claro. No añadas permisos amplios de almacenamiento.
 

@@ -13,6 +13,7 @@ import android.os.IBinder
 import android.provider.MediaStore
 import androidx.core.app.NotificationCompat
 import com.rikiluciano.linka.R
+import com.rikiluciano.linka.LinkaApplication
 import com.rikiluciano.linka.extractor.DownloadQuality
 import com.rikiluciano.linka.extractor.MediaFormat
 import com.rikiluciano.linka.extractor.VideoExtractor
@@ -25,9 +26,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.File
 import java.util.UUID
 import kotlin.math.max
+
+data class DownloadFeedback(val message: String, val isError: Boolean = false)
 
 class DownloadService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -53,6 +57,7 @@ class DownloadService : Service() {
             stopSelf(startId)
             return START_NOT_STICKY
         }
+        feedback.value = DownloadFeedback("Preparando descarga…")
         startAsForeground(notification("Preparando descarga", 0, "Iniciando…", true))
         scope.launch {
             val outputDir = File(cacheDir, "linka-downloads")
@@ -92,6 +97,9 @@ class DownloadService : Service() {
                 }
             }
             try {
+                runCatching { (application as LinkaApplication).ensureYtDlpUpdated() }
+                    .onFailure { android.util.Log.w("Linka", "No se pudo actualizar yt-dlp; se probará el motor incluido.", it) }
+                feedback.value = DownloadFeedback("Descarga en curso; el progreso aparece en la notificación.")
                 withContext(Dispatchers.IO) {
                     YoutubeDL.getInstance().execute(request, processId) { percentage, _, _ ->
                         progress = percentage.coerceIn(0f, 100f)
@@ -110,12 +118,16 @@ class DownloadService : Service() {
                 val saved = outputDir.listFiles().orEmpty()
                     .filter { it.isFile && it.name !in before && !it.name.endsWith(".part") && it.lastModified() >= startedAt }
                     .mapNotNull(::publishToDownloads)
-                val completion = if (saved.any { it }) "Guardado en Descargas/Linka" else "No se pudo guardar en Descargas; revisa la app"
+                val completed = saved.any { it }
+                val completion = if (completed) "Guardado en Descargas/Linka" else "No se pudo guardar en Descargas; revisa la app"
+                feedback.value = DownloadFeedback(completion, isError = !completed)
                 notificationManager().notify(notificationId, notification(title, 100, completion, false))
                 stopForeground(STOP_FOREGROUND_DETACH)
             } catch (error: Exception) {
                 speedMonitor.cancel()
-                notificationManager().notify(notificationId, notification(title, progress.toInt(), "No se pudo descargar: ${error.message ?: "error del extractor"}", false))
+                val detail = usefulError(error)
+                feedback.value = DownloadFeedback(detail, isError = true)
+                notificationManager().notify(notificationId, notification(title, progress.toInt(), detail, false))
                 stopForeground(STOP_FOREGROUND_DETACH)
             } finally {
                 stopSelf(startId)
@@ -184,6 +196,14 @@ class DownloadService : Service() {
 
     private fun notificationManager() = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
+    private fun usefulError(error: Exception): String {
+        val lines = error.message.orEmpty().lineSequence().map(String::trim).filter(String::isNotBlank).toList()
+        val detail = lines.firstOrNull { it.startsWith("ERROR:", ignoreCase = true) }
+            ?: lines.firstOrNull { it.contains("unsupported url", ignoreCase = true) || it.contains("HTTP Error", ignoreCase = true) }
+        return (detail ?: "No se pudo descargar. El sitio pudo bloquear la solicitud o no ser compatible.")
+            .take(220)
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
@@ -192,6 +212,7 @@ class DownloadService : Service() {
     }
 
     companion object {
+        val feedback = MutableStateFlow<DownloadFeedback?>(null)
         private const val CHANNEL_ID = "linka_downloads"
         private const val ACTION_DOWNLOAD = "com.rikiluciano.linka.DOWNLOAD"
         private const val EXTRA_URL = "url"

@@ -21,7 +21,7 @@ Linka reúne esas tareas en una interfaz Android: navegas a una página, la app 
 - Navegador integrado con barra de dirección para páginas HTTP y HTTPS.
 - Entrada de una URL compartida desde otra app Android.
 - Detección de elementos de video del DOM y solicitudes multimedia comunes (`mp4`, `m3u8`, `mpd` y audio/video directo).
-- Extracción de título y formatos disponibles con el wrapper Android de yt-dlp.
+- Extracción de título y formatos disponibles con el wrapper Android de yt-dlp; antes de analizar o descargar, Linka comprueba y actualiza yt-dlp desde el canal estable de GitHub.
 - Selección automática de la mejor calidad disponible, elección de formato de video y extracción de audio MP3.
 - Descarga de flujos de video y audio separados y combinación mediante FFmpeg cuando el formato y el extractor lo permiten.
 - Servicio en primer plano para mantener visible una descarga iniciada por el usuario, con notificación de porcentaje, velocidad estimada y estado de finalización.
@@ -30,8 +30,8 @@ Linka reúne esas tareas en una interfaz Android: navegas a una página, la app 
 
 ## Límites y compatibilidad
 
-- yt-dlp admite muchos sitios, pero no existe garantía de que una página concreta sea compatible. Los extractores y los formatos dependen del sitio y de la versión incluida en la librería.
-- La detección del navegador es heurística. Detectar un reproductor o una solicitud multimedia no garantiza que yt-dlp pueda analizar esa página.
+- yt-dlp admite muchos sitios, pero no existe garantía de que una página concreta sea compatible. Los extractores y los formatos dependen del sitio y de la versión actualizada de yt-dlp.
+- La detección del navegador es heurística. La barra para buscar opciones permanece visible aunque el detector no encuentre un reproductor; esto tampoco garantiza que yt-dlp pueda analizar esa página.
 - Los sitios que exigen inicio de sesión, cookies, verificación anti-bot, fingerprint especial, contenido DRM o permisos del propietario no son compatibles con esta configuración. Linka no intenta evadir esas restricciones.
 - La aplicación no obtiene credenciales ni reutiliza sesiones del WebView para yt-dlp.
 - La descarga y la conversión dependen de la conectividad, el espacio disponible, los códecs y los límites del proveedor.
@@ -45,10 +45,9 @@ Linka reúne esas tareas en una interfaz Android: navegas a una página, la app 
 ```mermaid
 flowchart TD
     A[El usuario abre una página en WebView] --> B[WebView inspecciona DOM y solicitudes multimedia]
-    B --> C{Señal de medio detectada}
-    C -- No --> A
-    C -- Sí --> D[El usuario toca el botón de descarga]
-    D --> E[VideoExtractor consulta yt-dlp]
+    B --> C[La barra de descarga permanece visible]
+    C --> D[El usuario pide opciones de descarga]
+    D --> E[Linka actualiza yt-dlp y analiza la página]
     E --> F[Compose muestra formatos y calidades]
     F --> G[El usuario selecciona calidad o MP3]
     G --> H[DownloadService ejecuta yt-dlp en segundo plano]
@@ -61,9 +60,9 @@ flowchart TD
 
 1. `MainActivity` inicia Compose y acepta `ACTION_SEND` o `ACTION_VIEW` con una dirección web.
 2. `BrowserView` carga la página. El detector inspecciona los recursos multimedia solicitados y consulta etiquetas de video con `evaluateJavascript` de solo lectura. No expone un puente `JavascriptInterface` a páginas arbitrarias.
-3. El botón aparece cuando hay una señal. Solo al tocarlo se ejecuta `VideoExtractor.inspect()` en IO y se consultan los formatos.
-4. `LinkaViewModel` mantiene la dirección, la página detectada, los formatos y los errores en `StateFlow`.
-5. `DownloadService` se inicia como servicio en primer plano, ejecuta yt-dlp fuera del hilo principal y actualiza el porcentaje. Un monitor del archivo temporal estima kB/s; el progreso puede variar entre extractores.
+3. La barra de descarga queda visible cuando hay una página abierta. Al tocarla, Linka actualiza yt-dlp desde el canal estable de GitHub e invoca `VideoExtractor.inspect()` en IO para consultar formatos.
+4. `LinkaViewModel` mantiene la dirección, la página detectada, el estado de actualización, los formatos, el resultado de la descarga y los errores en `StateFlow`.
+5. `DownloadService` se inicia como servicio en primer plano, intenta actualizar yt-dlp y ejecuta el motor fuera del hilo principal. Un monitor del archivo temporal estima kB/s; el progreso puede variar entre extractores. Los fallos concisos aparecen en la notificación y dentro de Linka.
 6. yt-dlp llama a FFmpeg para combinar pistas o extraer MP3. Linka copia el resultado a `MediaStore.Downloads` y lo deja en `Descargas/Linka`.
 
 ## Tecnologías
@@ -102,7 +101,7 @@ Linka/
 2. Sincroniza Gradle y espera la descarga inicial de las dependencias nativas; el APK de desarrollo será considerablemente mayor que el MVP anterior porque incorpora Python/yt-dlp y FFmpeg.
 3. Compila `:app:assembleDebug` o ejecuta **Build > Build APK(s)**.
 4. Instala `app/build/outputs/apk/debug/app-debug.apk` en un dispositivo Android 10 o posterior.
-5. Navega a una página compatible, espera el indicador, toca el botón de descarga y elige una calidad. Autoriza notificaciones si quieres ver el progreso en el panel del sistema.
+5. Navega o comparte un enlace, toca **Buscar opciones de descarga**, elige mejor calidad, MP3 o un formato detectado. La primera comprobación de actualizaciones necesita internet. Autoriza notificaciones si quieres ver el progreso en el panel del sistema.
 
 La compilación CI adjunta `linka.apk` a cada Release creado por una etiqueta `v*`. Descarga la última versión desde [GitHub Releases](https://github.com/rikiluciano/Linka/releases/latest).
 
