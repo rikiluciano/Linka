@@ -25,7 +25,7 @@ object AppInstaller {
             AppUpdateEvents.set(AppUpdateState.Installing(version))
             val callback = Intent(context, AppInstallReceiver::class.java).apply {
                 action = INSTALL_STATUS_ACTION
-                putExtra(EXTRA_VERSION, version)
+                putExtra("version", version)
             }
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_MUTABLE else 0)
             val pending = PendingIntent.getBroadcast(context, sessionId, callback, flags)
