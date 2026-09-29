@@ -266,6 +266,15 @@ fun LinkaScreen(model: LinkaViewModel) {
                                 fontWeight = FontWeight.SemiBold,
                             )
                         }
+                        if (state.pageUrl != null) {
+                            TextButton(
+                                onClick = model::downloadDirectFile,
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 2.dp),
+                            ) {
+                                Text("Descargar archivo o imagen del enlace", fontWeight = FontWeight.Medium)
+                            }
+                        }
                     }
                 }
             },
@@ -294,7 +303,7 @@ fun LinkaScreen(model: LinkaViewModel) {
                             }
                             Text("Tu enlace. Tu elección.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                             Text(
-                                "Explora una página o pega un enlace. Linka te mostrará las calidades reales del video y te permitirá guardar solo el audio en MP3.",
+                                "Explora una página o pega un enlace. Elige la calidad real del video, guarda audio MP3 o descarga directamente imágenes y archivos.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center,

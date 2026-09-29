@@ -8,8 +8,8 @@ Guía autosuficiente para mantener Linka sin depender del historial de conversac
 - **Repositorio público:** `https://github.com/rikiluciano/Linka`.
 - **Application ID / namespace:** `com.rikiluciano.linka`.
 - **Lenguaje/UI:** Kotlin, Jetpack Compose.
-- **Arquitectura:** una Activity, ViewModel con `StateFlow`, extractor separado y servicio de descarga en primer plano.
-- **Propósito:** navegador Android con análisis de páginas de video mediante yt-dlp, selección de formatos y descarga/ensamblado local con FFmpeg.
+- **Arquitectura:** una Activity, ViewModel con `StateFlow`, extractor separado, servicio de medios en primer plano y descarga directa con `DownloadManager`.
+- **Propósito:** navegador Android con análisis de páginas de video mediante yt-dlp, selección de formatos, descarga directa de recursos HTTP(S) y ensamblado local con FFmpeg.
 - **Uso:** el usuario debe poseer los derechos o tener autorización para guardar el medio.
 - **Límites:** no usar cookies del WebView, credenciales, fingerprint spoofing, CAPTCHA bypass, DRM bypass ni otros controles de acceso. El extractor no garantiza soporte de cualquier dominio. Los sitios pueden cambiar y bloquear peticiones.
 - **Privacidad:** no hay backend Linka, telemetría, anuncios, cuentas ni historial persistido de URLs.
@@ -49,7 +49,8 @@ Linka/
 │       ├── java/com/rikiluciano/linka/
 │       │   ├── LinkaApplication.kt            # inicialización yt-dlp + FFmpeg
 │       │   ├── MainActivity.kt                # host Compose, ACTION_SEND/ACTION_VIEW
-│       │   ├── download/DownloadService.kt    # FGS, progreso, MediaStore
+│       │   ├── download/DownloadService.kt    # FGS, progreso, MediaStore de audio/video
+│       │   ├── download/DirectFileDownload.kt # DownloadManager para recursos HTTP(S)
 │       │   ├── extractor/MediaFormat.kt       # dominio y selector de calidad
 │       │   ├── extractor/VideoExtractor.kt    # getInfo, filtros, request yt-dlp
 │       │   ├── update/AppUpdate.kt              # GitHub latest release, digest y estados
@@ -65,6 +66,7 @@ Linka/
 ├── gradle.properties                          # AndroidX/JVM
 ├── LICENSE                                    # GPL-3.0
 ├── README.md                                  # documentación pública
+├── AGENT_HANDOFF.md                           # traspaso portable del proyecto
 ├── publish-linka.ps1                          # estación → servidor → GitHub
 └── sync-to-github.sh                          # commit, semver, push, tag
 ```
@@ -93,7 +95,7 @@ Los servicios foreground tienen requisitos/limites de Android dependientes de la
 
 `LinkaUiState` concentra barra, URL cargada, flag detección, trabajo de inspección, `ExtractedMedia` y error. La UI observa `StateFlow` con `collectAsState`. Mantener llamadas de red/extracción fuera del main thread.
 
-`LinkaScreen` presenta barra de dirección, navegador y una barra inferior persistente para buscar opciones; no depende de que el detector automático acierte. El BottomSheet enseña mejor calidad, MP3 y formatos extraídos. La descarga solo inicia tras elección expresa. Mantén visibles los errores de análisis y el resultado del servicio.
+`LinkaScreen` presenta barra de dirección, navegador y una barra inferior persistente con dos acciones independientes: analizar medios para elegir calidad/audio y guardar el recurso original de la URL actual. No depende de que el detector automático acierte. El BottomSheet enseña mejor calidad, MP3 y formatos extraídos. Mantén visibles los errores de análisis y el resultado del servicio.
 
 La comprobación de actualización se inicia al crear `LinkaViewModel` y ejecuta la petición a GitHub en IO sin bloquear Compose. Si no hay versión nueva, no muestra aviso; un error de red tampoco bloquea la navegación. Si encuentra una versión más nueva, `LinkaScreen` pregunta aceptar/posponer. Aceptar inicia `AppUpdateService`; al terminar, la UI ofrece abrir el flujo nativo de instalación. Al volver de Ajustes de fuentes desconocidas, la misma tarjeta permite continuar.
 
@@ -132,6 +134,10 @@ El formato puede ser adaptativo; `VideoFormat` API exacta depende de la librerí
 ## 9. Descargas en background y almacenamiento
 
 `DownloadService` recibe solo extras internos explícitos: URL, título, `format_id`, audio-only y presencia de audio. Usa `ContextCompat.startForegroundService`, intenta actualizar yt-dlp, ejecuta `YoutubeDL.execute` en coroutine IO y notifica el estado. `DownloadService.feedback` expone por `StateFlow` el resultado conciso hacia la UI. El progreso estimado se obtiene del crecimiento de archivos temporales en caché; es una aproximación, no velocidad de red exacta suministrada por yt-dlp.
+
+`DirectFileDownload.enqueue(context, url)` atiende un enlace directo a imagen, documento o cualquier otro recurso. Valida HTTP/HTTPS con host, deriva un nombre del último segmento URL, limpia caracteres que puedan formar rutas y añade timestamp para impedir colisiones. Luego delega la transferencia a Android `DownloadManager`, con notificación visible y destino público `Download/Linka`; acepta cualquier extensión/MIME porque no convierte ni inspecciona el contenido. Android 10+ y `minSdk 29` permiten esa ubicación sin permiso amplio. No se añade dependencia ni permiso.
+
+Esta acción es explícita y guarda exactamente lo que responde la dirección: una URL PDF/JPG/DOCX descarga ese recurso; una página normal descarga su HTML, no descubre adjuntos incrustados. No se pasan cookies, cabeceras de WebView ni credenciales; recursos autenticados pueden fallar. El nombre procede del path de la URL (no se consulta Content-Disposition). El mensaje inmediato confirma que se encoló, no que finalizó; errores posteriores los comunica DownloadManager.
 
 Al terminar, busca los archivos generados por esta tarea, excluye `.part`, e inserta/copía cada archivo terminado a `MediaStore.Downloads` con `RELATIVE_PATH=Download/Linka` e `IS_PENDING` durante la copia. Si la publicación falla, debe borrar cualquier entrada pendiente y mostrar fallo claro. No añadas permisos amplios de almacenamiento.
 

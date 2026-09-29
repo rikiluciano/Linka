@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.rikiluciano.linka.LinkaApplication
 import com.rikiluciano.linka.download.DownloadService
+import com.rikiluciano.linka.download.DirectFileDownload
 import com.rikiluciano.linka.download.DownloadFeedback
 import com.rikiluciano.linka.extractor.DownloadQuality
 import com.rikiluciano.linka.extractor.ExtractedMedia
@@ -159,6 +160,17 @@ class LinkaViewModel(application: Application) : AndroidViewModel(application) {
         }
         DownloadService.start(app, url, current.media?.title ?: "Descarga de Linka", quality)
         mutableState.update { it.copy(media = null, detected = false, error = "Descarga iniciada. Sigue su progreso en la notificación.") }
+    }
+
+    fun downloadDirectFile() {
+        val url = mutableState.value.pageUrl ?: return
+        runCatching { DirectFileDownload.enqueue(getApplication(), url) }
+            .onSuccess { name ->
+                mutableState.update { it.copy(error = "Descarga iniciada: $name · revisa la notificación o Descargas/Linka.") }
+            }
+            .onFailure { error ->
+                mutableState.update { it.copy(error = error.message ?: "No se pudo iniciar la descarga directa.") }
+            }
     }
 
     private fun normalizeAddress(value: String): String? {
