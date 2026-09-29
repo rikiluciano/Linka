@@ -22,14 +22,15 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -52,6 +53,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,11 +63,16 @@ import com.rikiluciano.linka.extractor.MediaFormat
 import com.rikiluciano.linka.update.AppUpdateState
 
 private val LinkaColors = darkColorScheme(
-    primary = Color(0xFF8877FF),
+    primary = Color(0xFF9B8CFF),
     onPrimary = Color.White,
-    background = Color(0xFF11131A),
-    surface = Color(0xFF1B1F2A),
-    onSurface = Color(0xFFF1F2F7),
+    secondary = Color(0xFF65DEC0),
+    onSecondary = Color(0xFF06241D),
+    background = Color(0xFF0C0F16),
+    surface = Color(0xFF151A25),
+    surfaceVariant = Color(0xFF202737),
+    onSurface = Color(0xFFF3F4FA),
+    onSurfaceVariant = Color(0xFFB4BAC9),
+    outline = Color(0xFF394255),
 )
 
 private enum class DownloadMode { Video, Audio }
@@ -134,28 +142,56 @@ fun LinkaScreen(model: LinkaViewModel) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
-                Surface(color = MaterialTheme.colorScheme.surface) {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        Text("Linka", style = MaterialTheme.typography.titleLarge, color = LinkaColors.primary)
-                        Text(
-                            "Navega y guarda contenido que tengas permiso para descargar",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                            modifier = Modifier.padding(bottom = 10.dp),
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                            Surface(
+                                modifier = Modifier.size(42.dp),
+                                shape = RoundedCornerShape(15.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("L", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                                }
+                            }
+                            Column(Modifier.weight(1f)) {
+                                Text("Linka", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                Text(
+                                    "Navega · elige · guarda",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceVariant) {
+                                Text("SIN ANUNCIOS", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             OutlinedTextField(
                                 value = state.address,
                                 onValueChange = model::editAddress,
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
-                                label = { Text("Dirección web") },
+                                label = { Text("Enlace o dirección web") },
+                                shape = RoundedCornerShape(18.dp),
+                                textStyle = MaterialTheme.typography.bodyMedium,
                             )
-                            Button(onClick = model::navigate) { Text("Ir") }
+                            Button(
+                                onClick = model::navigate,
+                                modifier = Modifier.height(54.dp),
+                                shape = RoundedCornerShape(17.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp),
+                            ) { Text("Abrir", fontWeight = FontWeight.SemiBold) }
                         }
-                        TextButton(onClick = ::pasteLink, modifier = Modifier.padding(top = 2.dp)) { Text("Pegar enlace del portapapeles") }
-                        if (state.extracting) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 6.dp))
-                        state.error?.let { Text(it, Modifier.padding(top = 6.dp), color = Color(0xFFFFB4AB), maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = ::pasteLink, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                                Text("Pegar enlace", fontWeight = FontWeight.SemiBold)
+                            }
+                            Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Solo contenido que tengas permiso para guardar", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        if (state.extracting) LinearProgressIndicator(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.secondary)
+                        state.error?.let { Text(it, Modifier.fillMaxWidth(), color = Color(0xFFFFB4AB), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall) }
                     }
                 }
             },
@@ -164,20 +200,41 @@ fun LinkaScreen(model: LinkaViewModel) {
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 5.dp,
                     shadowElevation = 10.dp,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
                 ) {
                     Column(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(9.dp),
                     ) {
-                        Text(
-                            text = when {
-                                state.pageUrl == null -> "Pega un enlace o navega hasta un video"
-                                state.detected -> "Video detectado · toca para elegir calidad"
-                                else -> "¿Hay un video en esta página? Analiza el enlace"
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Surface(
+                                modifier = Modifier.size(9.dp),
+                                shape = RoundedCornerShape(50),
+                                color = if (state.detected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
+                            ) { }
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = when {
+                                        state.pageUrl == null -> "Listo para explorar"
+                                        state.detected -> "Contenido multimedia detectado"
+                                        else -> "¿Hay un video en esta página?"
+                                    },
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text = when {
+                                        state.pageUrl == null -> "Pega un enlace o abre un sitio web"
+                                        state.detected -> "Analiza el enlace y elige cómo guardarlo"
+                                        else -> "Busca los formatos disponibles en la fuente"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
                         state.downloadFeedback?.let { feedback ->
                             Text(
                                 feedback.message,
@@ -193,14 +250,20 @@ fun LinkaScreen(model: LinkaViewModel) {
                                 model.extractFormats()
                             },
                             enabled = state.pageUrl != null && !state.extracting,
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            modifier = Modifier.fillMaxWidth().height(54.dp),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            ),
                         ) {
                             Text(
                                 when {
                                     state.updatingExtractor -> "Actualizando motor…"
                                     state.extracting -> "Analizando página…"
-                                    else -> "Buscar opciones de descarga  ↓"
+                                    else -> "Elegir descarga   ↓"
                                 },
+                                fontWeight = FontWeight.SemiBold,
                             )
                         }
                     }
@@ -217,23 +280,34 @@ fun LinkaScreen(model: LinkaViewModel) {
                 if (state.pageUrl == null) {
                     Surface(
                         modifier = Modifier.align(Alignment.Center).fillMaxWidth().padding(horizontal = 22.dp),
-                        shape = RoundedCornerShape(24.dp),
+                        shape = RoundedCornerShape(28.dp),
                         color = MaterialTheme.colorScheme.surface,
                         tonalElevation = 3.dp,
                     ) {
                         Column(
-                            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 28.dp),
+                            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 26.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
-                            Text("Tu enlace. Tu elección.", style = MaterialTheme.typography.headlineSmall)
+                            Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceVariant) {
+                                Text("VIDEO · AUDIO · A TU MANERA", Modifier.padding(horizontal = 12.dp, vertical = 7.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.SemiBold)
+                            }
+                            Text("Tu enlace. Tu elección.", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                             Text(
-                                "Abre una página o pega un enlace. Linka analizará las calidades que realmente ofrezca el video y te dejará elegir video o MP3.",
+                                "Explora una página o pega un enlace. Linka te mostrará las calidades reales del video y te permitirá guardar solo el audio en MP3.",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
                             )
-                            Button(onClick = ::pasteLink, modifier = Modifier.fillMaxWidth().height(48.dp)) {
-                                Text("Pegar enlace")
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("480p", "HD", "4K", "MP3").forEach { label ->
+                                    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceVariant) {
+                                        Text(label, Modifier.padding(horizontal = 11.dp, vertical = 7.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                            }
+                            Button(onClick = ::pasteLink, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(17.dp)) {
+                                Text("Pegar un enlace", fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -242,11 +316,29 @@ fun LinkaScreen(model: LinkaViewModel) {
         }
 
         if (showQualities) {
-            ModalBottomSheet(onDismissRequest = { showQualities = false }) {
-                Column(Modifier.fillMaxWidth().fillMaxHeight(0.85f).padding(horizontal = 20.dp, vertical = 8.dp)) {
-                    Text("Opciones de descarga", style = MaterialTheme.typography.titleLarge)
+            ModalBottomSheet(
+                onDismissRequest = { showQualities = false },
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                containerColor = MaterialTheme.colorScheme.surface,
+            ) {
+                Column(Modifier.fillMaxWidth().fillMaxHeight(0.84f).padding(horizontal = 20.dp, vertical = 8.dp)) {
+                    Text("Tu descarga", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text("Elige formato y calidad", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp, bottom = 14.dp))
                     state.media?.let { media ->
-                        Text(media.title, Modifier.padding(top = 4.dp, bottom = 8.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Surface(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                        ) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text("VISTA PREVIA", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+                                Text(media.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                state.pageUrl?.let { raw ->
+                                    val host = runCatching { Uri.parse(raw).host?.removePrefix("www.") }.getOrNull()
+                                    if (!host.isNullOrBlank()) Text(host, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
                     }
                     if (state.extracting) {
                         Row(
@@ -259,22 +351,23 @@ fun LinkaScreen(model: LinkaViewModel) {
                         }
                     }
                     state.media?.let { media ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                             FilterChip(
                                 selected = downloadMode == DownloadMode.Video,
                                 onClick = { downloadMode = DownloadMode.Video },
                                 enabled = media.videoQualities().isNotEmpty(),
+                                modifier = Modifier.weight(1f),
                                 label = { Text("Video") },
                             )
                             FilterChip(
                                 selected = downloadMode == DownloadMode.Audio,
                                 onClick = { downloadMode = DownloadMode.Audio },
                                 enabled = media.hasAudioSource(),
+                                modifier = Modifier.weight(1f),
                                 label = { Text("Audio MP3") },
                             )
                         }
-                        HorizontalDivider()
-                        LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+                        LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false)) {
                             when (downloadMode) {
                                 DownloadMode.Video -> {
                                     val options = media.videoQualities()
@@ -288,27 +381,34 @@ fun LinkaScreen(model: LinkaViewModel) {
                                         }
                                     } else items(options, key = MediaFormat::id) { format ->
                                         val isSelected = selectedVideoFormat?.id == format.id
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().clickable { selectedVideoFormat = format }.padding(vertical = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { selectedVideoFormat = format },
+                                            shape = RoundedCornerShape(18.dp),
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
                                         ) {
-                                            Column(Modifier.weight(1f)) {
-                                                Text(qualityLabel(format.height), style = MaterialTheme.typography.titleMedium)
-                                                Text(
-                                                    if (format.height == options.first().height) "Máxima resolución que ofrece esta fuente"
-                                                    else "Resolución disponible en el archivo original",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                                )
-                                                if (format.needsMerge) Text(
-                                                    "Linka unirá el audio compatible automáticamente",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                                )
+                                            Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        Text(qualityLabel(format.height), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                                        if (format.height == options.first().height) Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f)) {
+                                                            Text("MÁXIMA", Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+                                                        }
+                                                    }
+                                                    Text(
+                                                        if (format.height == options.first().height) "Mayor resolución disponible en la fuente"
+                                                        else "Resolución original disponible",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    )
+                                                    if (format.needsMerge) Text(
+                                                        "El audio se combinará automáticamente",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    )
+                                                }
+                                                RadioButton(selected = isSelected, onClick = { selectedVideoFormat = format })
                                             }
-                                            RadioButton(selected = isSelected, onClick = { selectedVideoFormat = format })
                                         }
-                                        HorizontalDivider()
                                     }
                                 }
                                 DownloadMode.Audio -> item {
@@ -335,12 +435,13 @@ fun LinkaScreen(model: LinkaViewModel) {
                                 DownloadMode.Video -> selectedVideoFormat != null
                                 DownloadMode.Audio -> media.hasAudioSource()
                             },
-                            modifier = Modifier.fillMaxWidth().height(50.dp).padding(bottom = 4.dp),
+                            modifier = Modifier.fillMaxWidth().height(54.dp).padding(top = 8.dp, bottom = 12.dp),
+                            shape = RoundedCornerShape(18.dp),
                         ) {
                             Text(
                                 when (downloadMode) {
-                                    DownloadMode.Video -> selectedVideoFormat?.let { "Descargar ${qualityLabel(it.height)}" } ?: "Video no disponible"
-                                    DownloadMode.Audio -> "Descargar MP3 · alta calidad"
+                                    DownloadMode.Video -> selectedVideoFormat?.let { "Descargar video · ${qualityLabel(it.height)}" } ?: "Video no disponible"
+                                    DownloadMode.Audio -> "Descargar audio · MP3"
                                 },
                             )
                         }
