@@ -103,9 +103,10 @@ Antes de publicar: revisa `git status`, inspecciona el diff completo y conserva 
 
 ## 7. Estado al entregar
 
-- Última versión conocida antes de este paquete: `v1.0.10` (`versionCode 11`). Comprobar remoto porque CI/releases pueden progresar mientras el agente no está activo.
-- Trabajo de esta entrega: botón explícito de descarga directa, `DirectFileDownload` sobre Android `DownloadManager`, mensajes de estado, README/CODEX y este handoff.
-- Release esperado al publicar en una base aún en v1.0.10: `v1.0.11`; confirmar el tag real antes de afirmarlo. La build no está verificada hasta que Actions termine en verde y aparezca el APK Release.
+- Última versión publicada conocida: `v1.0.11` (`versionCode 12`, commit `f112144`). Confirma en GitHub el último tag/Release antes de publicar.
+- La v1.0.11 añadió el botón de descarga directa, `DirectFileDownload` con Android `DownloadManager`, mensajes de estado y la documentación base.
+- **Reporte del usuario (2026-09-30; no reproducido ni corregido):** la descarga directa de imágenes/archivos multiformato no funcionó en su teléfono. También falló descargar un video desde una página web cuyo enlace, según el usuario, sí descarga Snaptube. No se proporcionaron URL, texto/código de error, modelo Android ni logs; no afirmar que esté resuelto ni que la comparación se haya verificado independientemente.
+- Próxima herramienta: reproducir primero la descarga directa con URL pública a un archivo y consultar estado/motivo de `DownloadManager`; para el video, registrar el error conciso de yt-dlp y solicitar/probar la URL exacta autorizada. Distinguir un enlace al archivo de una página HTML y no añadir cookies, DRM bypass ni evasión de controles.
 - El usuario prioriza interfaz pulida, rendimiento y UX. Proponer/ejecutar mejoras concretas, conservar la navegación simple y escribir documentación junto al código cuando cambie el comportamiento.
 
 ## 8. Próximos pasos recomendados
